@@ -1,11 +1,6 @@
-import React from "react"
-import { Tag } from "~/components/tag"
-import { Input } from "~/components/ui/input"
-import slugify from "slugify"
+import { RabbitIcon } from "lucide-react"
 import { Section } from "~/components/section"
 import { Autocomplete } from "~/components/ui/autocomplete"
-
-const tags = ["Design Patterns", "React", "Web", "Boas Práticas"]
 
 export default function Home() {
   return (
@@ -14,10 +9,20 @@ export default function Home() {
         <div className="p-10">
           <div className="flex flex-col gap-3">
             <h1 className="text-2xl font-bold">Busque por um tópico</h1>
-            <Autocomplete
-              className="min-w-[70vw]"
-              placeholder="Procure algum tópico..."
-            />
+            <Autocomplete.Root
+              onSelectItem={console.log}
+              options={["Design Patterns", "React", "Observer", "Web", "Boas Práticas"]}
+            >
+              <Autocomplete.Input placeholder="Procure algum tópico..." />
+              <Autocomplete.ClosePopover />
+              <Autocomplete.OptionsPopover />
+              <Autocomplete.OnNotFound>
+                <div className="flex justify-center gap-2 px-4 py-4 text-sm font-medium text-neutral-500">
+                  <RabbitIcon />
+                  <p>No tags found with this query :/</p>
+                </div>
+              </Autocomplete.OnNotFound>
+            </Autocomplete.Root>
           </div>
           {/* <div className="flex flex-wrap gap-2">
             {tags.map(tag => (

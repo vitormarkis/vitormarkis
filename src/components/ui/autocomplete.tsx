@@ -1,66 +1,85 @@
-import { RabbitIcon, XIcon } from "lucide-react"
-import mergeRefs from "merge-refs"
-import React, { CSSProperties, useEffect } from "react"
+import React from "react"
 import ReactDOM from "react-dom"
-import { Button } from "~/components/ui/button"
-import { Input, Input_borderCls } from "~/components/ui/input"
+import mergeRefs from "merge-refs"
+
 import { cn } from "~/lib/utils"
 import { isRefElementClicked } from "~/utils"
+import { Button } from "~/components/ui/button"
+import { RabbitIcon, XIcon } from "lucide-react"
+import { Input, Input_borderCls } from "~/components/ui/input"
 
-const tags = ["Design Patterns", "React", "Web", "Boas Práticas"]
+type AutocompleteContextValue = {
+  options: string[]
+  refInput: React.RefObject<HTMLInputElement>
+  refCloseButton: React.RefObject<HTMLButtonElement>
+  refInputContainer: React.RefObject<HTMLDivElement>
 
-export type AutocompleteProps = React.ComponentPropsWithoutRef<typeof Input>
+  style: React.CSSProperties
+  dispatch: React.Dispatch<Action>
+  state: State
+}
 
-export const Autocomplete = React.forwardRef<
-  React.ElementRef<typeof Input>,
-  AutocompleteProps
->(function AutocompleteComponent({ className, ...props }, __ref) {
+export type Action =
+  | { type: "QUERY:SET"; query: string }
+  | { type: "QUERY:CLEAR" }
+  | { type: "POPOVER:TOGGLE"; isOpening: boolean }
+  | { type: "POPOVER:OPEN" }
+  | { type: "POPOVER:CLOSE" }
+  | { type: "TOGGLE-SELECTED"; backwards?: boolean }
+  | { type: "SELECT-ITEM"; index: number | null }
+  | { type: "UPDATE-DEPENDENCY"; deps: Partial<State> }
+
+export type State = {
+  isPopoverExpanded: boolean
+  options: string[]
+  initialOptions: string[]
+  query: string
+  emptyOptions: boolean
+  selectedSomething: boolean
+  selectedIndex: number | null
+  selectedItem: string | null
+}
+
+export const AutocompleteContext = React.createContext<AutocompleteContextValue>(
+  {} as AutocompleteContextValue
+)
+
+type AutocompleteRootProps = React.PropsWithChildren & {
+  options: string[]
+  onSelectItem?: (item: string) => void
+}
+
+export const AutocompleteRoot = React.forwardRef<
+  React.ElementRef<"div">,
+  AutocompleteRootProps
+>(function AutocompleteRootComponent({ onSelectItem, options, children, ...props }, ref) {
   const refInputContainer = React.useRef<HTMLDivElement>(null)
   const refInput = React.useRef<HTMLInputElement>(null)
   const refCloseButton = React.useRef<HTMLButtonElement>(null)
-  const mergedRefs = mergeRefs(refInputContainer, __ref)
-  type Action =
-    | { type: "QUERY:SET"; query: string }
-    | { type: "QUERY:CLEAR" }
-    | { type: "POPOVER:TOGGLE"; isOpening: boolean }
-    | { type: "POPOVER:OPEN" }
-    | { type: "POPOVER:CLOSE" }
-    | { type: "TOGGLE-SELECTED"; backwards?: boolean }
-    | { type: "SELECT-ITEM"; index: number | null }
-
-  type State = {
-    isPopoverExpanded: boolean
-    tags: string[]
-    initialTags: string[]
-    query: string
-    emptyTags: boolean
-    selectedSomething: boolean
-    selectedIndex: number | null
-    selectedItem: string | null
-  }
-
   const initialState: State = {
     isPopoverExpanded: false,
-    tags,
-    initialTags: tags,
+    options,
+    initialOptions: options,
     query: "",
-    emptyTags: false,
+    emptyOptions: false,
     selectedSomething: false,
     selectedIndex: null,
     selectedItem: null,
   }
 
-  function onSelectItem(item: string) {
-    console.log(item)
-  }
-
   const [state, dispatch] = React.useReducer<React.Reducer<State, Action>>(
     (prevState, action) => {
-      const state = { ...prevState }
+      let state = { ...prevState }
 
       // Derivações pré `action`
 
       switch (action.type) {
+        case "UPDATE-DEPENDENCY":
+          state = {
+            ...state,
+            ...action.deps,
+          }
+          break
         case "QUERY:SET":
           state.query = action.query
           break
@@ -79,15 +98,15 @@ export const Autocomplete = React.forwardRef<
           break
         case "SELECT-ITEM":
           const idx = action.index ?? state.selectedIndex ?? 0
-          state.query = state.tags[idx]
+          state.query = state.options[idx]
           state.isPopoverExpanded = false
-          onSelectItem(state.tags[idx])
+          onSelectItem?.(state.options[idx])
           break
         case "TOGGLE-SELECTED":
-          if (!action.backwards && state.selectedIndex === state.tags.length - 1) {
+          if (!action.backwards && state.selectedIndex === state.options.length - 1) {
             state.selectedIndex = 0
           } else if (action.backwards && state.selectedIndex === 0) {
-            state.selectedIndex = state.tags.length - 1
+            state.selectedIndex = state.options.length - 1
           } else {
             if (state.selectedIndex !== null) {
               if (action.backwards) state.selectedIndex--
@@ -100,19 +119,23 @@ export const Autocomplete = React.forwardRef<
       }
 
       // Derivações pré `render`
-      state.tags = state.initialTags.filter(tag =>
+      state.options = state.initialOptions.filter(tag =>
         tag.toLowerCase().trim().includes(state.query.toLowerCase().trim())
       )
-      state.emptyTags = state.tags.length === 0
+      state.emptyOptions = state.options.length === 0
       if (state.isPopoverExpanded === false) state.selectedIndex = null
-      if (prevState.tags.length !== state.tags.length) state.selectedIndex = 0
+      if (prevState.options.length !== state.options.length) state.selectedIndex = 0
       state.selectedSomething = state.selectedIndex !== null
       return state
     },
     initialState
   )
 
-  useEffect(() => {
+  React.useEffect(() => {
+    dispatch({ type: "UPDATE-DEPENDENCY", deps: { initialOptions: options } })
+  }, [options])
+
+  React.useEffect(() => {
     function handler(e: KeyboardEvent) {
       if (isRefElementClicked(e, refCloseButton)) return
 
@@ -150,7 +173,7 @@ export const Autocomplete = React.forwardRef<
     }
   }, [])
 
-  const style: CSSProperties = {
+  const style: React.CSSProperties = {
     transform: `translate(${refInputContainer.current?.getBoundingClientRect().left}px, ${(refInputContainer.current?.getBoundingClientRect().bottom ?? 0) + 8}px)`,
     width: refInputContainer.current
       ? refInputContainer.current?.clientWidth + 2 + "px"
@@ -158,131 +181,141 @@ export const Autocomplete = React.forwardRef<
   }
 
   return (
-    <>
+    <AutocompleteContext.Provider
+      value={{
+        options,
+        state,
+        style,
+        refInput,
+        refInputContainer,
+        refCloseButton,
+        dispatch,
+      }}
+    >
       <div
-        ref={mergedRefs}
+        ref={refInputContainer}
         className={cn("flex h-9", Input_borderCls, "focus-within:border-sky-500")}
+        {...props}
       >
-        <Input
-          ref={refInput}
-          facade
-          value={state.query}
-          onChange={e => dispatch({ type: "QUERY:SET", query: e.target.value })}
-          onFocus={() => {
-            dispatch({ type: "POPOVER:OPEN" })
-            setTimeout(() => {
-              refInputContainer.current?.focus()
-            })
-          }}
-          onKeyDown={e => {
-            if (e.key === "Tab" && state.isPopoverExpanded && !state.emptyTags) {
-              e.preventDefault()
-            }
-          }}
-          onClick={e => {
-            dispatch({ type: "POPOVER:OPEN" })
-          }}
-          className={cn("", className)}
-          placeholder="Procure algum tópico..."
-          {...props}
-        />
-        <button
-          ref={refCloseButton}
-          onClick={() => {
-            dispatch({ type: "QUERY:CLEAR" })
-          }}
-          className="grid aspect-square h-full place-items-center hover:bg-neutral-100"
-        >
-          <XIcon className="h-3 w-3" />
-        </button>
+        {children}
       </div>
-      {state.isPopoverExpanded
-        ? ReactDOM.createPortal(
-            <div
-              role="combobox"
-              className="absolute left-0 top-0 z-50 w-72 border bg-white text-popover-foreground outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2"
-              style={style}
-            >
-              {state.emptyTags ? (
-                <div className="flex justify-center gap-2 px-4 py-4 text-sm font-medium text-neutral-500">
-                  <RabbitIcon />
-                  <p>No tags found with this query :/</p>
-                </div>
-              ) : (
-                state.tags.map((tag, index) => (
-                  <Button
-                    tabIndex={-1}
-                    variant="ghost"
-                    key={tag}
-                    className={cn(
-                      "flex w-full items-center justify-start gap-2 px-4 py-2",
-                      index === state.selectedIndex && "bg-neutral-100"
-                    )}
-                    onClick={() => {
-                      dispatch({ type: "SELECT-ITEM", index })
-                    }}
-                  >
-                    <span className="text-sm font-medium text-neutral-500">{tag}</span>
-                  </Button>
-                ))
-              )}
-            </div>,
-            document.querySelector("#portal")!
-          )
-        : null}
-    </>
+    </AutocompleteContext.Provider>
   )
 })
 
-// <Popover
-// open={state.isPopoverExpanded}
-// onOpenChange={isOpening => {
-// dispatch({ type: "POPOVER:TOGGLE", isOpening })
-// }}
-// >
-// {/* <PopoverTrigger
-// tabIndex={null}
-// className="w-full"
-// asChild
-// onKeyDown={e => {
-//   if (e.key === "Tab") {
-//     if (state.isPopoverExpanded) {
-//       e.preventDefault()
-//     }
-//   }
-// }}
-// > */}
+export type AutocompleteInputProps = React.ComponentPropsWithoutRef<typeof Input>
 
-// </PopoverTrigger>
+export const AutocompleteInput = React.forwardRef<
+  React.ElementRef<typeof Input>,
+  AutocompleteInputProps
+>(function AutocompleteInputComponent({ className, ...props }, __ref) {
+  const { dispatch, refInput, state, refInputContainer } =
+    React.useContext(AutocompleteContext)
+  const ref = mergeRefs(__ref, refInput)
 
-// {/* <PopoverContent
-// style={{
-//   width: ref.current?.clientWidth ? ref.current?.clientWidth + 2 : "100%",
-// }}
-// >
-// {state.emptyTags ? (
-//   <div className="flex justify-center gap-2 px-4 py-4 text-sm font-medium text-neutral-500">
-//     <RabbitIcon />
-//     <p>No tags found with this query :/</p>
-//   </div>
-// ) : (
-//   state.tags.map((tag, idx) => (
-//     <Button
-//       tabIndex={null}
-//       variant="ghost"
-//       key={tag}
-//       className={cn(
-//         "flex w-full items-center justify-start gap-2 px-4 py-2",
-//         idx === state.selectedIndex && "bg-neutral-100"
-//       )}
-//       onClick={() => {
-//         dispatch({ type: "SELECT-ITEM" })
-//       }}
-//     >
-//       <span className="text-sm font-medium text-neutral-500">{tag}</span>
-//     </Button>
-//   ))
-// )}
-// </PopoverContent> */}
-// // </Popover>
-// )
+  return (
+    <Input
+      ref={ref}
+      className={cn("", className)}
+      {...props}
+      facade={props.facade ?? true}
+      value={props.value ?? state.query}
+      onChange={e => {
+        dispatch({ type: "QUERY:SET", query: e.target.value })
+        props.onChange?.(e)
+      }}
+      onFocus={e => {
+        dispatch({ type: "POPOVER:OPEN" })
+        setTimeout(() => {
+          refInputContainer.current?.focus()
+        })
+        props.onFocus?.(e)
+      }}
+      onKeyDown={e => {
+        if (e.key === "Tab" && state.isPopoverExpanded && !state.emptyOptions) {
+          e.preventDefault()
+        }
+        props.onKeyDown?.(e)
+      }}
+      onClick={e => {
+        dispatch({ type: "POPOVER:OPEN" })
+        props.onClick?.(e)
+      }}
+      placeholder={props.placeholder ?? "Procure algum tópico..."}
+    />
+  )
+})
+
+export type AutocompleteClosePopoverProps = React.ComponentPropsWithoutRef<"button">
+
+export const AutocompleteClosePopover = React.forwardRef<
+  React.ElementRef<"button">,
+  AutocompleteClosePopoverProps
+>(function AutocompleteClosePopoverComponent({ className, ...props }, __ref) {
+  const { refCloseButton, dispatch } = React.useContext(AutocompleteContext)
+  const ref = mergeRefs(refCloseButton, __ref)
+  return (
+    <button
+      ref={ref}
+      {...props}
+      className={cn(
+        "grid aspect-square h-full place-items-center hover:bg-neutral-100",
+        className
+      )}
+      onClick={e => {
+        dispatch({ type: "QUERY:CLEAR" })
+        props.onClick?.(e)
+      }}
+    >
+      <XIcon className="h-3 w-3" />
+    </button>
+  )
+})
+
+type AutocompleteOptionsPopoverProps = {}
+
+export function AutocompleteOptionsPopover({}: AutocompleteOptionsPopoverProps) {
+  const { state, style, dispatch } = React.useContext(AutocompleteContext)
+  if (!state.isPopoverExpanded) return null
+
+  return ReactDOM.createPortal(
+    <div
+      role="combobox"
+      className="absolute left-0 top-0 z-50 w-72 border bg-white text-popover-foreground outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2"
+      style={style}
+    >
+      {state.emptyOptions ? (
+        <div className="flex justify-center gap-2 px-4 py-4 text-sm font-medium text-neutral-500">
+          <RabbitIcon />
+          <p>No options found with this query :/</p>
+        </div>
+      ) : (
+        state.options.map((tag, index) => (
+          <Button
+            tabIndex={-1}
+            variant="ghost"
+            key={tag}
+            className={cn(
+              "flex w-full items-center justify-start gap-2 px-4 py-2",
+              index === state.selectedIndex && "bg-neutral-100"
+            )}
+            onClick={() => {
+              dispatch({ type: "SELECT-ITEM", index })
+            }}
+          >
+            <span className="text-sm font-medium text-neutral-500">{tag}</span>
+          </Button>
+        ))
+      )}
+    </div>,
+    document.querySelector("#portal")!
+  )
+}
+
+export const Autocomplete = {
+  Root: AutocompleteRoot,
+  Input: AutocompleteInput,
+  ClosePopover: AutocompleteClosePopover,
+  OptionsPopover: AutocompleteOptionsPopover,
+  OnNotFound: ({ children }: React.PropsWithChildren) => <></>,
+}
