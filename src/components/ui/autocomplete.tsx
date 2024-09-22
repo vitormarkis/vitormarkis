@@ -3,7 +3,7 @@ import ReactDOM from "react-dom"
 import mergeRefs from "merge-refs"
 
 import { cn } from "~/lib/utils"
-import { isRefElementClicked } from "~/utils"
+import { createDiff, extractChanges, isRefElementClicked } from "~/utils"
 import { Button } from "~/components/ui/button"
 import { Input, Input_borderCls } from "~/components/ui/input"
 import { Slot } from "@radix-ui/react-slot"
@@ -122,13 +122,21 @@ export const AutocompleteRoot = React.forwardRef<
       }
 
       // Derivações pré `render`
-      state.options = state.initialOptions.filter(tag =>
-        tag.toLowerCase().trim().includes(state.query.toLowerCase().trim())
-      )
+      const diff = createDiff(prevState, state)
+
+      if (diff([s => s.query, s => s.initialOptions])) {
+        state.options = state.initialOptions.filter(tag =>
+          tag.toLowerCase().trim().includes(state.query.toLowerCase().trim())
+        )
+      }
       state.emptyOptions = state.options.length === 0
       if (state.isPopoverExpanded === false) state.selectedIndex = null
       if (prevState.options.length !== state.options.length) state.selectedIndex = 0
       state.selectedSomething = state.selectedIndex !== null
+
+      // Debug
+      const [hasChanges, changes] = extractChanges(prevState, state)
+      if (!hasChanges) return prevState
       return state
     },
     initialState
