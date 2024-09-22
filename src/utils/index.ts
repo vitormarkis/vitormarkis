@@ -1,5 +1,5 @@
 export const isRefElementClicked = (
-  e: Event,
+  e: { target: EventTarget | null },
   ref: React.RefObject<HTMLElement>
 ): boolean => {
   if (!ref.current) return false

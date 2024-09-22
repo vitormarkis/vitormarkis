@@ -1,4 +1,4 @@
-import { RabbitIcon } from "lucide-react"
+import { RabbitIcon, XIcon } from "lucide-react"
 import { Section } from "~/components/section"
 import { Autocomplete } from "~/components/ui/autocomplete"
 
@@ -13,8 +13,14 @@ export default function Home() {
               onSelectItem={console.log}
               options={["Design Patterns", "React", "Observer", "Web", "Boas Práticas"]}
             >
-              <Autocomplete.Input placeholder="Procure algum tópico..." />
-              <Autocomplete.ClosePopover />
+              <Autocomplete.Container>
+                <Autocomplete.Input placeholder="Procure algum tópico..." />
+                <Autocomplete.ClosePopover asChild>
+                  <button className="grid aspect-square h-full place-items-center hover:bg-neutral-100">
+                    <XIcon className="h-3 w-3" />
+                  </button>
+                </Autocomplete.ClosePopover>
+              </Autocomplete.Container>
               <Autocomplete.OptionsPopover />
               <Autocomplete.OnNotFound>
                 <div className="flex justify-center gap-2 px-4 py-4 text-sm font-medium text-neutral-500">
